@@ -3,6 +3,7 @@ csv/
 plots/
 bags/
 data/
+run_*/
 
 # Database files
 *.db
