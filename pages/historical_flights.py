@@ -62,7 +62,7 @@ if flights:
     
     # Summary statistics
     st.subheader("Flight Summary Statistics")
-    df = pd.DataFrame(flights, columns=['ID', 'Flight Name', 'Mean Error', 'Std Error', 'Total Points', 'Date', 'Beacon Lat', 'Beacon Lon', 'Beacon Alt', 'Plot Path'])
+    df = pd.DataFrame(flights, columns=['ID', 'Flight Name', 'Mean Error', 'Std Error', 'Total Points', 'Date', 'Beacon Lat', 'Beacon Lon', 'Beacon Alt', 'Plot Path', 'Bag Path', 'CSV Path'])
     st.dataframe(df[['Flight Name', 'Mean Error', 'Std Error', 'Total Points', 'Date']])
     
 else:

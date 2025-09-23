@@ -29,6 +29,8 @@ def plot_uwb_error_over_actual_distance(merged_df, ros_bag_file, plot_output_dir
     plt.colorbar(label='Radial Velocity (m/s)')
     plt.xlabel('Actual Distance (meters) - GPS measured to Beacon')
     plt.ylabel('UWB Error (meters)')
+    
+    #save the plot to the plot output dir
     plt.suptitle('UWB Error vs Actual Distance to Beacon', fontsize=14, fontweight='bold')
     plt.title(f'Run: {ros_bag_file}', fontsize = 10)
     plt.grid(True)
@@ -63,6 +65,28 @@ def plot_uwb_distance_vs_gps_actual_distance_merged(merged_df, ros_bag_file, plo
     plt.grid(True)
     plt.legend()
     plt.savefig(os.path.join(plot_output_dir, 'uwb_distance_vs_gps_actual_distance_merged.png'), dpi=300)
+    plt.clf()
+    plt.close()
+
+# Plot aircraft GPS path
+def plot_aircraft_path(gps_df, beacon_lat, beacon_lon, commanded_landing, ros_bag_file, plot_output_dir):
+    plt.figure(figsize=(12, 8))
+    plt.plot(gps_df['longitude'], gps_df['latitude'], 'b-', linewidth=2, label='Aircraft Path')
+    plt.scatter(gps_df['longitude'].iloc[0], gps_df['latitude'].iloc[0], c='green', s=100, marker='^', label='Start')
+    plt.scatter(gps_df['longitude'].iloc[-1], gps_df['latitude'].iloc[-1], c='red', s=100, marker='v', label='End')
+    plt.scatter(beacon_lon, beacon_lat, c='orange', s=150, marker='*', label='Beacon')
+    
+    if commanded_landing:
+        plt.scatter(commanded_landing['lon'], commanded_landing['lat'], c='purple', s=100, marker='x', label='UWB Landing Est.')
+    
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.suptitle('Aircraft Flight Path', fontsize=14, fontweight='bold')
+    plt.title(f'Run: {ros_bag_file}', fontsize=10)
+    plt.grid(True)
+    plt.legend()
+    plt.axis('equal')
+    plt.savefig(os.path.join(plot_output_dir, 'aircraft_flight_path.png'), dpi=300)
     plt.clf()
     plt.close()
 

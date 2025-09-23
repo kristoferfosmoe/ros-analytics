@@ -4,3 +4,4 @@ numpy
 matplotlib
 rosbags
 sqlite3
+geographiclib
