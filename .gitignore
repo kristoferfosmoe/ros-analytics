@@ -4,6 +4,7 @@ plots/
 bags/
 data/
 run_*/
+kzm/
 
 # Database files
 *.db

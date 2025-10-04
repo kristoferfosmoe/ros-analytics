@@ -13,7 +13,7 @@ import math
 # ros_bag_file = 'run_2025_09_18_12-53-02' # Some database files are missing.
 # ros_bag_file = 'run_2025_09_18_12-43-47'
 # ros_bag_file = 'run_2025_09_18_13-10-27'
-ros_bag_file = 'run_2025_09_18_15-26-02'
+ros_bag_file = 'run_2025_09_18_16-20-20'
 
 
 ## Input the actual locaiton of the beacon here ##
@@ -23,28 +23,28 @@ beacon_alt = 325.281693
 
 ### Parse the Ros Bag to CSV ###
 ros_bag_file_path = os.path.join('bags', ros_bag_file) # Use only the folder name, not the mcap file.
-csv_output_dir = os.path.join('data', ros_bag_file)
+csv_output_dir = os.path.join('csv', ros_bag_file)
 if not os.path.exists(csv_output_dir):
     os.makedirs(csv_output_dir)
 
 ### YOU ONLY NEED TO RUN THIS ONCE TO PARSE THE ROS BAG TO CSV ###
-parser = RosbagParser(bag_file_path=ros_bag_file_path, output_dir=csv_output_dir)
-parser.export_to_csv()
+# parser = RosbagParser(bag_file_path=ros_bag_file_path, output_dir=csv_output_dir)
+# parser.export_to_csv()
 
 ## End of Ros Bag Parsing ##
 
 ## Create a data frame of the aircraft GPS, velocity, and UWB predicted range distance ##
-uwb_distance_file = os.path.join(csv_output_dir, f'{ros_bag_file}_uwb_distance.csv')
+uwb_distance_file = os.path.join(csv_output_dir, 'bag_uwb_distance.csv')
 uwb_distance_df = pd.read_csv(uwb_distance_file)
 columns_to_keep = ['timestamp', 'distance']
 uwb_distance_df = uwb_distance_df[columns_to_keep] # Keep only the timestamp and distance columns
 
-aircraft_gps_file = os.path.join(csv_output_dir, f'{ros_bag_file}_mavros_global_position_global.csv')
+aircraft_gps_file = os.path.join(csv_output_dir, 'bag_mavros_global_position_global.csv')
 aircraft_gps_file_df = pd.read_csv(aircraft_gps_file)
 columns_to_keep = ['timestamp', 'latitude', 'longitude', 'altitude']
 aircraft_gps_file_df = aircraft_gps_file_df[columns_to_keep]
 
-aircraft_velocity_file = os.path.join(csv_output_dir, f'{ros_bag_file}_mavros_local_position_velocity_local.csv')
+aircraft_velocity_file = os.path.join(csv_output_dir, 'bag_mavros_local_position_velocity_local.csv')
 aircraft_velocity_df = pd.read_csv(aircraft_velocity_file)
 columns_to_keep = ['timestamp', 'twist.linear.x', 'twist.linear.y', 'twist.linear.z']
 aircraft_velocity_df = aircraft_velocity_df[columns_to_keep]
@@ -109,6 +109,13 @@ aircraft_gps_file_df['actual_distance'] = aircraft_gps_file_df.apply(
 plot_output_dir = os.path.join('plots', ros_bag_file)
 if not os.path.exists(plot_output_dir):
     os.makedirs(plot_output_dir)
+
+state_file = os.path.join('/home/kris/src/ros-analytics/csv/run_2025_09_18_16-20-20/bag_uwb_state.csv')
+uwb_state_df = pd.read_csv(state_file)
+uwb_state_df = uwb_state_df[['timestamp','sigma', 'x', 'y']]
+# filter all sigma values below 100
+uwb_state_df = uwb_state_df[uwb_state_df['sigma'] < 100]
+print(uwb_state_df.tail(10))
 
 # # Create a scatter plot of the error by distance, coloring the scatter by radial velocity
 # plt.scatter(merged_df['actual_distance'], merged_df['beacon_error'], c=merged_df['radial_velocity'], cmap='viridis', s=10)

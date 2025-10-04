@@ -6,13 +6,15 @@ import math
 import tempfile
 from pathlib import Path
 from geographiclib.geodesic import Geodesic
+from pyproj import Proj, transform
 from BagToCsv import RosbagParser
 from plot_utilities import (
     plot_uwb_error_over_time,
     plot_uwb_error_over_actual_distance,
     plot_uwb_distance_vs_gps_actual_distance_merged,
     plot_uwb_distance_vs_gps_actual_distance,
-    plot_aircraft_path
+    plot_aircraft_path,
+    plot_sigma_time
 )
 from database_utils import save_flight_data
 
@@ -50,6 +52,7 @@ def process_bag_data(bag_path, csv_output_dir, beacon_lat, beacon_lon, beacon_al
     gps_file = os.path.join(csv_output_dir, f'{bag_name}_mavros_global_position_global.csv')
     vel_file = os.path.join(csv_output_dir, f'{bag_name}_mavros_local_position_velocity_local.csv')
     state_file = os.path.join(csv_output_dir, f'{bag_name}_uwb_state.csv')
+    lz_file = os.path.join(csv_output_dir, f'{bag_name}_uwb_lz.csv')
 
     if not all(os.path.exists(f) for f in [uwb_file, gps_file, vel_file]):
         st.error("Required CSV files not found.")
@@ -58,46 +61,53 @@ def process_bag_data(bag_path, csv_output_dir, beacon_lat, beacon_lon, beacon_al
     uwb_df = pd.read_csv(uwb_file)[['timestamp', 'distance']]
     gps_df = pd.read_csv(gps_file)[['timestamp', 'latitude', 'longitude', 'altitude']]
     vel_df = pd.read_csv(vel_file)[['timestamp', 'twist.linear.x', 'twist.linear.y', 'twist.linear.z']]
-    
-    # Load UWB state data if available
-    uwb_state_df = None
-    if os.path.exists(state_file):
-        uwb_state_df = pd.read_csv(state_file)
+    uwb_state_df = pd.read_csv(state_file)
+
+    # Load UWB LZ message data if available
+    uwb_lz_df = None
+    if os.path.exists(lz_file):
+        uwb_lz_df = pd.read_csv(lz_file)
         # Extract x, y position estimates from UWB state
-        if 'x' in uwb_state_df.columns and 'y' in uwb_state_df.columns:
-            uwb_state_df = uwb_state_df[['timestamp','sigma', 'x', 'y']]
+        if 'x' in uwb_lz_df.columns and 'y' in uwb_lz_df.columns:
+            uwb_lz_df = uwb_lz_df[['timestamp', 'x', 'y']]
     
     # Convert UWB state NED coordinates to GPS coordinates
     commanded_landing = None
-    if uwb_state_df is not None and not uwb_state_df.empty:
+    if uwb_lz_df is not None and not uwb_lz_df.empty:
         # Use beacon location as reference point for NED conversion
         geod = Geodesic.WGS84
         
+        # Add the nearest GPS position to the UWB state data
+        state_gps_merged = pd.merge_asof(uwb_lz_df.sort_values('timestamp'),
+                              gps_df.sort_values('timestamp'),
+                              on='timestamp', direction='nearest')
+
         # Get the last UWB state position (x=North, y=East in NED)
-        last_state = uwb_state_df.iloc[-1]
+        last_state = state_gps_merged.iloc[-1]
         
-        # Parse array strings to get first two values
-        x_str = last_state['x'].strip('[]')
-        y_str = last_state['y'].strip('[]')
-        
-        north_m = float(x_str.split()[0])
-        east_m = float(y_str.split()[0])
+        # Parse array strings to get all values
+        x_str = last_state['x']
+        y_str = last_state['y']
         
         # Get last known GPS position of aircraft
-        last_gps = gps_df.iloc[-1]
-        aircraft_lat = last_gps['latitude']
-        aircraft_lon = last_gps['longitude']
+        aircraft_lat = last_state['latitude']
+        aircraft_lon = last_state['longitude']
         
-        # Convert NED to GPS using last aircraft position as reference
-        result = geod.Direct(aircraft_lat, aircraft_lon, math.degrees(math.atan2(east_m, north_m)), 
-                           math.sqrt(north_m**2 + east_m**2))
+        # Use pyproj for accurate LocalCartesian conversion
+        # Create local cartesian projection centered at aircraft position
+        proj_string = f"+proj=tmerc +lat_0={aircraft_lat} +lon_0={aircraft_lon} +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        local_proj = Proj(proj_string)
+        wgs84_proj = Proj(proj='latlong', datum='WGS84')
+        
+        # Convert NED coordinates to GPS
+        landing_lon, landing_lat = transform(local_proj, wgs84_proj, y_str, x_str)
         
         # Calculate distance from beacon to commanded landing point
-        landing_distance = haversine(beacon_lat, beacon_lon, result['lat2'], result['lon2'])
+        landing_distance = haversine(beacon_lat, beacon_lon, landing_lat, landing_lon)
         
         commanded_landing = {
-            'lat': result['lat2'],
-            'lon': result['lon2'],
+            'lat': landing_lat,
+            'lon': landing_lon,
             'distance_from_beacon': landing_distance
         }
     
@@ -133,6 +143,9 @@ st.sidebar.header("Beacon Configuration")
 beacon_lat = st.sidebar.number_input("Beacon Latitude", value=40.3791014, format="%.7f")
 beacon_lon = st.sidebar.number_input("Beacon Longitude", value=-79.6078958, format="%.7f")
 beacon_alt = st.sidebar.number_input("Beacon Altitude (m)", value=325.281693, format="%.6f")
+
+st.sidebar.header("Localizer Configuration")
+sigma_threshold = st.sidebar.number_input("Sigma Threshold", value=2.0, format="%.1f")
 
 uploaded_files = st.file_uploader(
     "Upload ROS2 bag folder contents (.yaml and .mcap file)",
@@ -216,7 +229,16 @@ if uploaded_files:
                         if os.path.exists(plot4_path):
                             st.image(plot4_path, caption="UWB vs GPS Distance Over Time")
                         
+                        # Plot sigma over time
+                        st.subheader("Sigma Over Time, values less than 50")
+                        sigma_df = uwb_state_df[uwb_state_df['sigma'] < 50]
+                        plot_sigma_time(sigma_df,sigma_threshold, bag_name, plot_dir)
+                        plot6_path = os.path.join(plot_dir, 'sigma_over_time.png')
+                        if os.path.exists(plot6_path):
+                            st.image(plot6_path, caption="Sigma Over Time")
+
                         # Plot aircraft path
+                        st.subheader("Aircraft Flight Path")
                         plot_aircraft_path(gps_df, beacon_lat, beacon_lon, commanded_landing, bag_name, plot_dir)
                         plot5_path = os.path.join(plot_dir, 'aircraft_flight_path.png')
                         if os.path.exists(plot5_path):

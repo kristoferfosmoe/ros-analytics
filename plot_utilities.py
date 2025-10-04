@@ -71,7 +71,7 @@ def plot_uwb_distance_vs_gps_actual_distance_merged(merged_df, ros_bag_file, plo
 # Plot aircraft GPS path
 def plot_aircraft_path(gps_df, beacon_lat, beacon_lon, commanded_landing, ros_bag_file, plot_output_dir):
     plt.figure(figsize=(12, 8))
-    plt.plot(gps_df['longitude'], gps_df['latitude'], 'b-', linewidth=2, label='Aircraft Path')
+    plt.plot(gps_df['longitude'], gps_df['latitude'], 'b-', linewidth=1, label='Aircraft Path')
     plt.scatter(gps_df['longitude'].iloc[0], gps_df['latitude'].iloc[0], c='green', s=100, marker='^', label='Start')
     plt.scatter(gps_df['longitude'].iloc[-1], gps_df['latitude'].iloc[-1], c='red', s=100, marker='v', label='End')
     plt.scatter(beacon_lon, beacon_lat, c='orange', s=150, marker='*', label='Beacon')
@@ -90,6 +90,18 @@ def plot_aircraft_path(gps_df, beacon_lat, beacon_lon, commanded_landing, ros_ba
     plt.clf()
     plt.close()
 
+def plot_sigma_time (sigma_df, sigma_threshold, ros_bag_file, plot_output_dir):
+    plt.figure(figsize=(12, 8))
+    plt.scatter(sigma_df['timestamp'], sigma_df['sigma'], c='blue', s=10)
+    plt.axhline(y=sigma_threshold, color='red', linestyle='--', label=f'Sigma Threshold: {sigma_threshold}')
+    plt.xlabel('Timestamp')
+    plt.ylabel('Sigma')
+    plt.suptitle('Sigma Over Time', fontsize=14, fontweight='bold')
+    plt.title(f'Run: {ros_bag_file}', fontsize=10)
+    plt.grid(True)
+    plt.savefig(os.path.join(plot_output_dir, 'sigma_over_time.png'), dpi=300)
+    plt.clf()
+    plt.close()
 
 
 # # Compare the radial velocity to the UWB error

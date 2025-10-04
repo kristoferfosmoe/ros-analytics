@@ -31,8 +31,9 @@ if not st.session_state.authenticated:
             st.error("Invalid credentials")
 else:
     # Navigation
-    st.sidebar.title("Navigation")
-    page = st.sidebar.selectbox("Select Page", ["Home", "Current Flight Analysis", "Historical Flight Data"])
+    if st.session_state.authenticated:
+        st.sidebar.title("Navigation")
+        page = st.sidebar.selectbox("Select Page", ["Home", "Current Flight Analysis", "Historical Flight Data"])
     
     if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
