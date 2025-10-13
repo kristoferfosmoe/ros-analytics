@@ -52,7 +52,7 @@ def process_bag_data(bag_path, csv_output_dir, beacon_lat, beacon_lon, beacon_al
     gps_file = os.path.join(csv_output_dir, f'{bag_name}_mavros_global_position_global.csv')
     vel_file = os.path.join(csv_output_dir, f'{bag_name}_mavros_local_position_velocity_local.csv')
     state_file = os.path.join(csv_output_dir, f'{bag_name}_uwb_state.csv')
-    lz_file = os.path.join(csv_output_dir, f'{bag_name}_uwb_lz.csv')
+    lz_file = os.path.join(csv_output_dir, f'{bag_name}_uwb_lz_nav.csv')
 
     if not all(os.path.exists(f) for f in [uwb_file, gps_file, vel_file]):
         st.error("Required CSV files not found.")
@@ -67,40 +67,16 @@ def process_bag_data(bag_path, csv_output_dir, beacon_lat, beacon_lon, beacon_al
     uwb_lz_df = None
     if os.path.exists(lz_file):
         uwb_lz_df = pd.read_csv(lz_file)
-        # Extract x, y position estimates from UWB state
-        if 'x' in uwb_lz_df.columns and 'y' in uwb_lz_df.columns:
-            uwb_lz_df = uwb_lz_df[['timestamp', 'x', 'y']]
+        # latitude and longitude
+        if 'latitude' in uwb_lz_df.columns and 'longitude' in uwb_lz_df.columns:
+            uwb_lz_df = uwb_lz_df[['timestamp', 'latitude', 'longitude']]
     
     # Convert UWB state NED coordinates to GPS coordinates
     commanded_landing = None
     if uwb_lz_df is not None and not uwb_lz_df.empty:
-        # Use beacon location as reference point for NED conversion
-        geod = Geodesic.WGS84
-        
-        # Add the nearest GPS position to the UWB state data
-        state_gps_merged = pd.merge_asof(uwb_lz_df.sort_values('timestamp'),
-                              gps_df.sort_values('timestamp'),
-                              on='timestamp', direction='nearest')
-
-        # Get the last UWB state position (x=North, y=East in NED)
-        last_state = state_gps_merged.iloc[-1]
-        
-        # Parse array strings to get all values
-        x_str = last_state['x']
-        y_str = last_state['y']
-        
-        # Get last known GPS position of aircraft
-        aircraft_lat = last_state['latitude']
-        aircraft_lon = last_state['longitude']
-        
-        # Use pyproj for accurate LocalCartesian conversion
-        # Create local cartesian projection centered at aircraft position
-        proj_string = f"+proj=tmerc +lat_0={aircraft_lat} +lon_0={aircraft_lon} +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
-        local_proj = Proj(proj_string)
-        wgs84_proj = Proj(proj='latlong', datum='WGS84')
-        
-        # Convert NED coordinates to GPS
-        landing_lon, landing_lat = transform(local_proj, wgs84_proj, y_str, x_str)
+        # Get the last row in the data frame
+        landing_lat = uwb_lz_df['latitude'].iloc[-1]
+        landing_lon = uwb_lz_df['longitude'].iloc[-1]
         
         # Calculate distance from beacon to commanded landing point
         landing_distance = haversine(beacon_lat, beacon_lon, landing_lat, landing_lon)
